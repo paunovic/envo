@@ -6,6 +6,7 @@ resolved per profile, naming via `ENVO_ENVIRONMENT`.
 ```
 envo qa seed app --yes
 envo localhost forge smoke
+envo refresh qa
 envo config
 ```
 
@@ -18,9 +19,7 @@ envo reads a profile's static credentials (`aws_access_key_id` and
 `aws_secret_access_key`) from `~/.aws/config` - honoring
 `AWS_CONFIG_FILE` - and injects them through the child's environment,
 never its argv: `ps` must not see keys. `envo eval <environment>`
-prints the same set as shell exports for prompt integration. Key
-rotation stays manual in the config file until a refresh command
-earns one.
+prints the same set as shell exports for prompt integration.
 
 A profile without static keys resolves through the aws cli
 (`aws configure export-credentials`), which covers sso sessions, role
@@ -28,6 +27,14 @@ chains and credential processes with its own token cache. An sso
 profile whose token expired gets `aws sso login` first - the cli
 prints the authorization url to the console and waits for the browser
 - then the export retries.
+
+`envo refresh <environment>` pre-warms and verifies credentials
+outside a command run: an sso profile gets `aws sso login` first -
+proactive, so an expired token never trips a real command - then the
+resolved credentials are proven with `aws sts get-caller-identity`,
+which prints the account and user id. Static-key profiles skip the
+login and only verify; their rotation stays manual in the config
+file.
 
 The first argument is the environment, everything after it is the
 command, verbatim - the `env`/`timeout` convention.
