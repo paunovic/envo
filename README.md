@@ -1,11 +1,15 @@
 # envo
 
-envo runs a command wearing another environment's identity: the aws
-profile's credentials are resolved, the repo's declared ssm
-parameters materialize, and everything reaches the child through
-its environment - never its argv, so `ps` never sees a key. The
-first argument names the environment, everything after it is the
-command, verbatim - the `env`/`timeout` convention.
+envo runs a command wearing another environment's identity: aws
+credentials resolved per profile and the repo's declared ssm
+parameters materialized into the child's environment - never its
+argv, so `ps` never sees a key. The first argument names the
+environment, everything after it is the command, verbatim - the
+`env`/`timeout` convention:
+
+```
+$ envo qa seed app --yes
+```
 
 ## Install
 
@@ -13,103 +17,44 @@ command, verbatim - the `env`/`timeout` convention.
 uv tool install git+https://github.com/paunovic/envo
 ```
 
-## Usage
+## Profiles
 
-```
-envo <environment> <command> [args...]
-envo eval <environment>
-envo refresh <environment>
-envo config
-```
-
-No arguments or `-h`/`--help` prints this usage.
-
-## What envo needs
-
-An aws profile for the environment, in `~/.aws/config`
-(`AWS_CONFIG_FILE` honored) - a static key pair, an sso session, a
-role chain all work. The profile name defaults to the environment's
-name, so matching names stay zero-config; a mapping in
-`~/.config/envo/config.toml` renames it:
+The profile name defaults to the environment's name, so matching
+names stay zero-config; a mapping in `~/.config/envo/config.toml`
+renames it:
 
 ```toml
 [environments.qa]
-profile = "marko-qa"
+profile = "acme-qa"
 ```
 
-A repo declares the env vars envo materializes, each naming the ssm
-parameter that holds its value - organizational truth, unlike
-profiles. The shared table applies to every environment, since most
-parameters live at the same path everywhere:
+`envo config` opens that file in your editor, creating it first
+on a fresh machine. Static keys are read from `~/.aws/config`;
+sso sessions, role chains and credential processes resolve through
+the aws cli - an expired sso token gets the browser login
+automatically.
+
+## Declared vars
+
+A repo declares the env vars envo materializes, each naming the
+ssm parameter that holds its value:
 
 ```toml
 [tool.envo.vars]
 SQUAD_APP_DATABASE_URL = "/database/app/url/master"
 ```
 
-An environment overrides or extends with its own table:
+An environment overrides with its own
+`[tool.envo.environments.<env>.vars]` table. `envo localhost` runs
+with only `ENVO_ENVIRONMENT` set - direnv owns local.
 
-```toml
-[tool.envo.environments.staging.vars]
-SQUAD_APP_DATABASE_URL = "/database/staging/url/master"
-```
+## Refresh and eval
 
-## How envo runs a command
-
-```
-$ envo qa seed app --yes
-```
-
-envo resolves the profile's credentials, fetches the declared
-parameters with `aws ssm get-parameters` in batches of ten under
-the environment's own credentials - the cli charges one boot per
-call, so one call per batch beats one per var - sets
-`ENVO_ENVIRONMENT=qa`, and execs the command with everything merged
-into its environment. The process is replaced, not wrapped: the
-child is the command, with no envo in between. A parameter the
-environment does not have names its variable and fails the run.
-
-`envo localhost <command>` skips all resolution and runs with only
-`ENVO_ENVIRONMENT` set - direnv owns local. The `local` spelling is
-rejected with a hint toward `localhost`.
-
-## How credentials resolve
-
-A static key pair (`aws_access_key_id` and `aws_secret_access_key`)
-is read straight from the aws config. Anything else goes through
-the cli's own resolution, `aws configure export-credentials`, which
-covers sso sessions, role chains and credential processes with its
-token cache. An sso profile whose token expired gets
-`aws sso login` first - the cli prints the authorization url to
-this console and waits for the browser - then the export retries.
-
-## Pre-warming with envo refresh
-
-```
-$ envo refresh qa
-```
-
-An sso profile logs in before a real command runs - and the resolved
-credentials are then proven with `aws sts get-caller-identity`,
-which prints the account and user id. Static-key profiles skip the
-login and only verify; their rotation stays manual in the config
-file.
-
-## Exports for prompts
-
-```
-$ envo eval qa
-export AWS_ACCESS_KEY_ID=AKIA-qa-key
-```
-
-`eval` prints the same set a run would inject as shell exports, for
-prompt integration; `envo eval localhost` prints only the
-`ENVO_ENVIRONMENT` export.
-
-## Editing the mapping
-
-`envo config` opens `~/.config/envo/config.toml` in a default editor,
-creating the file first on a fresh machine.
+`envo refresh qa` logs an sso profile in first and verifies the
+result, printing the account and user id - proactive, so an
+expired token never trips a real command. `envo eval qa` prints
+the same set a run would inject, as shell exports for prompt
+integration.
 
 ## Development
 
