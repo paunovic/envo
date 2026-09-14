@@ -89,8 +89,7 @@ this console and waits for the browser - then the export retries.
 $ envo refresh qa
 ```
 
-An sso profile logs in before anything can fail - proactive, so an
-expired token never trips a real command - and the resolved
+An sso profile logs in before a real command runs - and the resolved
 credentials are then proven with `aws sts get-caller-identity`,
 which prints the account and user id. Static-key profiles skip the
 login and only verify; their rotation stays manual in the config
@@ -109,9 +108,8 @@ prompt integration; `envo eval localhost` prints only the
 
 ## Editing the mapping
 
-`envo config` opens `~/.config/envo/config.toml` in `$EDITOR`
-(falling back to `$VISUAL`, then vi), creating the file first on a
-fresh machine.
+`envo config` opens `~/.config/envo/config.toml` in a default editor,
+creating the file first on a fresh machine.
 
 ## Development
 
