@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -13,6 +14,8 @@ def executed(monkeypatch: pytest.MonkeyPatch) -> list:
 
     def fake_execvpe(program: str, argv: list[str], env: dict) -> None:
         calls.append((program, argv, env))
+        # execvpe replaces the process on success; in tests it raises
+        raise SystemExit(0)
 
     monkeypatch.setattr(os, "execvpe", fake_execvpe)
     return calls
@@ -48,7 +51,10 @@ def write_user_config(monkeypatch: pytest.MonkeyPatch, tmp_path, table: str) -> 
 
 def run_argv(monkeypatch: pytest.MonkeyPatch, *arguments: str) -> int:
     monkeypatch.setattr(sys, "argv", ["envo", *arguments])
-    return cli.main()
+    try:
+        return cli.main()
+    except SystemExit as exit:
+        return int(exit.code)
 
 
 def test_a_remote_run_injects_credentials_through_the_environment(
@@ -132,7 +138,17 @@ def test_repo_declared_vars_materialize_under_the_credentials(
         return subprocess.CompletedProcess(
             argv,
             0,
-            stdout="postgresql+psycopg://app:secret@qa-db/app\n",
+            stdout=json.dumps(
+                {
+                    "Parameters": [
+                        {
+                            "Name": "/database/app/url/master",
+                            "Value": "postgresql+psycopg://app:secret@qa-db/app",
+                        }
+                    ],
+                    "InvalidParameters": [],
+                }
+            ),
             stderr="",
         )
 
@@ -163,9 +179,14 @@ def test_a_failed_materialization_names_the_variable_and_parameter(
         "run",
         lambda argv, **kwargs: subprocess.CompletedProcess(
             argv,
-            254,
-            stdout="",
-            stderr="parameter not found\n",
+            0,
+            stdout=json.dumps(
+                {
+                    "Parameters": [],
+                    "InvalidParameters": ["/database/missing"],
+                }
+            ),
+            stderr="",
         ),
     )
 
@@ -175,6 +196,103 @@ def test_a_failed_materialization_names_the_variable_and_parameter(
     assert exit_code == 1
     assert "SQUAD_APP_DATABASE_URL" in stderr
     assert "/database/missing" in stderr
+
+
+def test_declared_vars_resolve_in_one_bulk_call(
+    monkeypatch, tmp_path, executed, no_user_config, aws_config
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text(
+        "[tool.envo.environments.qa.vars]\n"
+        'SQUAD_APP_DATABASE_URL = "/database/app/url/master"\n'
+        'SQUAD_API_TOKEN = "/service/api/token"\n',
+    )
+    monkeypatch.chdir(repo)
+
+    calls: list[list[str]] = []
+
+    def fake_run(argv: list[str], **kwargs) -> subprocess.CompletedProcess:
+        calls.append(argv)
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=json.dumps(
+                {
+                    "Parameters": [
+                        {
+                            "Name": "/database/app/url/master",
+                            "Value": "postgresql://app@qa-db/app",
+                        },
+                        {
+                            "Name": "/service/api/token",
+                            "Value": "token-value",
+                        },
+                    ],
+                    "InvalidParameters": [],
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    exit_code = run_argv(monkeypatch, "qa", "seed", "app")
+
+    assert exit_code == 0
+    assert len(calls) == 1
+    assert calls[0][:6] == [
+        "aws",
+        "ssm",
+        "get-parameters",
+        "--names",
+        "/database/app/url/master",
+        "/service/api/token",
+    ]
+    assert "--with-decryption" in calls[0]
+    _, _, env = executed[0]
+    assert env["SQUAD_APP_DATABASE_URL"] == "postgresql://app@qa-db/app"
+    assert env["SQUAD_API_TOKEN"] == "token-value"
+
+
+def test_more_than_ten_parameters_split_across_bulk_calls(
+    monkeypatch, tmp_path, executed, no_user_config, aws_config
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    declarations = []
+    for index in range(12):
+        declarations.append(f'VAR_{index:02d} = "/bulk/param-{index:02d}"')
+    (repo / "pyproject.toml").write_text(
+        "[tool.envo.environments.qa.vars]\n" + "\n".join(declarations) + "\n",
+    )
+    monkeypatch.chdir(repo)
+
+    chunks: list[list[str]] = []
+
+    def fake_run(argv: list[str], **kwargs) -> subprocess.CompletedProcess:
+        start = argv.index("--names") + 1
+        end = argv.index("--with-decryption")
+        names = argv[start:end]
+        chunks.append(names)
+        entries = []
+        for name in names:
+            entries.append({"Name": name, "Value": f"value-{name}"})
+        return subprocess.CompletedProcess(
+            argv,
+            0,
+            stdout=json.dumps(
+                {"Parameters": entries, "InvalidParameters": []}
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    exit_code = run_argv(monkeypatch, "qa", "true")
+
+    assert exit_code == 0
+    assert [len(chunk) for chunk in chunks] == [10, 2]
 
 
 def test_eval_prints_the_environment_as_exports(
@@ -239,7 +357,17 @@ def test_shared_vars_apply_to_every_environment(
         lambda argv, **kwargs: subprocess.CompletedProcess(
             argv,
             0,
-            stdout="postgresql://shared\n",
+            stdout=json.dumps(
+                {
+                    "Parameters": [
+                        {
+                            "Name": "/database/app/url/master",
+                            "Value": "postgresql://shared",
+                        }
+                    ],
+                    "InvalidParameters": [],
+                }
+            ),
             stderr="",
         ),
     )
@@ -270,7 +398,17 @@ def test_an_environment_overrides_a_shared_var(
         lambda argv, **kwargs: subprocess.CompletedProcess(
             argv,
             0,
-            stdout="postgresql://overridden\n",
+            stdout=json.dumps(
+                {
+                    "Parameters": [
+                        {
+                            "Name": "/database/staging/url/master",
+                            "Value": "postgresql://overridden",
+                        }
+                    ],
+                    "InvalidParameters": [],
+                }
+            ),
             stderr="",
         ),
     )
