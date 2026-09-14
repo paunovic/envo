@@ -99,7 +99,7 @@ def is_sso_profile(profile: str) -> bool:
     # whether the profile section carries sso keys, so a device-code
     # login can refresh its token
     section = _parsed_profile(profile)
-    return any(key.startswith("sso_") for key in section.keys())
+    return any(key.startswith("sso_") for key in section)
 
 
 def login_profile(profile: str) -> None:

@@ -10,9 +10,14 @@ envo = "envo:main"
 
 [dependency-groups]
 dev = [
-    "pytest>=9.0",
+    "pytest>=9.0.2",
+    "ruff>=0.16.7",
+    "ty>=0.0.80",
 ]
 
 [build-system]
 requires = ["uv_build>=0.12.13,<0.13"]
 build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 90
