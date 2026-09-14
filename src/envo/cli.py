@@ -22,22 +22,24 @@ def materialize(
     credentials: dict[str, str],
     variables: dict[str, str],
 ) -> dict[str, str]:
-    # resolve each declared var's ssm parameter under the
-    # environment's own credentials
+    # resolve the declared vars' ssm parameters in bulk under the
+    # environment's own credentials; the cli charges one boot per
+    # call, so one call per ten parameters beats one per var
+    by_parameter = {parameter: variable for variable, parameter in variables.items()}
     values: dict[str, str] = {}
-    for variable, parameter in sorted(variables.items()):
+    parameters = sorted(by_parameter)
+    for start in range(0, len(parameters), 10):
+        chunk = parameters[start : start + 10]
         result = subprocess.run(
             [
                 "aws",
                 "ssm",
-                "get-parameter",
-                "--name",
-                parameter,
+                "get-parameters",
+                "--names",
+                *chunk,
                 "--with-decryption",
-                "--query",
-                "Parameter.Value",
                 "--output",
-                "text",
+                "json",
             ],
             capture_output=True,
             text=True,
@@ -45,11 +47,23 @@ def materialize(
             env={**os.environ, **credentials},
         )
         if result.returncode != 0:
+            listed = ", ".join(chunk)
             raise RuntimeError(
-                f"resolving {variable} from {parameter} failed:"
+                f"resolving ssm parameters {listed} failed:"
                 f" {result.stderr.strip()}",
             )
-        values[variable] = result.stdout.strip()
+        payload = json.loads(result.stdout)
+        # the plural call reports missing names without failing, so
+        # the absence of them is what success means
+        missing = payload.get("InvalidParameters", [])
+        if missing:
+            named = []
+            for parameter in missing:
+                variable = by_parameter.get(parameter, parameter)
+                named.append(f"{variable} from {parameter}")
+            raise RuntimeError(f"resolving {', '.join(named)} failed: not found")
+        for entry in payload.get("Parameters", []):
+            values[by_parameter[entry["Name"]]] = entry["Value"]
 
     return values
 
@@ -75,8 +89,6 @@ def run_argv(argv: list[str], injected: dict[str, str] | None = None) -> int:
     except FileNotFoundError as error:
         print(f"envo: cannot run {argv[0]}: {error}", file=sys.stderr)
         return 127
-
-    return 0
 
 
 def print_eval(environment: str) -> int:
