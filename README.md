@@ -28,7 +28,7 @@ renames it:
 profile = "acme-qa"
 ```
 
-`envo config` opens that file in your editor, creating it first
+`envo config` opens that file in the editor, creating it first
 on a fresh machine. Static keys are read from `~/.aws/config`;
 sso sessions, role chains and credential processes resolve through
 the aws cli - an expired sso token gets the browser login
