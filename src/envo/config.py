@@ -14,13 +14,8 @@ CONFIG_PATH = Path.home() / ".config" / "envo" / "config.toml"
 
 
 def configured_profiles() -> dict[str, str]:
-    """
-    Map environment names to aws profiles from the user's config.
-
-    A missing config or a missing profile entry means the profile
-    shares the environment's name - the common case stays zero-config.
-
-    """
+    # map environment names to aws profiles from the user's config; a
+    # missing entry means the profile shares the environment's name
     if not CONFIG_PATH.is_file():
         return {}
 
@@ -42,10 +37,7 @@ def configured_profiles() -> dict[str, str]:
 
 
 def aws_config_path() -> Path:
-    """
-    Locate the aws config file, honoring its own override variable.
-
-    """
+    # locate the aws config file, honoring its own override variable
     override = os.environ.get("AWS_CONFIG_FILE")
     if override:
         return Path(override)
@@ -65,14 +57,9 @@ def _parsed_profile(profile: str) -> configparser.SectionProxy:
 
 
 def exported_credentials(profile: str) -> dict[str, str]:
-    """
-    Resolve a profile's credentials through the aws cli.
-
-    Covers every shape envo does not parse itself - sso sessions,
-    role chains, credential processes - reusing the cli's own token
-    cache and refresh.
-
-    """
+    # resolve a profile's credentials through the aws cli - covers
+    # every shape envo does not parse itself (sso sessions, role
+    # chains, credential processes), reusing its token cache
     result = subprocess.run(
         [
             "aws",
@@ -109,21 +96,15 @@ def exported_credentials(profile: str) -> dict[str, str]:
 
 
 def is_sso_profile(profile: str) -> bool:
-    """
-    Whether the profile section carries sso keys, so a device-code
-    login can refresh its token.
-
-    """
+    # whether the profile section carries sso keys, so a device-code
+    # login can refresh its token
     section = _parsed_profile(profile)
     return any(key.startswith("sso_") for key in section.keys())
 
 
 def login_profile(profile: str) -> None:
-    """
-    Run the cli's device-code login for an sso profile - it prints
-    the authorization url to this console and waits for the browser.
-
-    """
+    # run the cli's device-code login for an sso profile - it prints
+    # the authorization url to this console and waits for the browser
     login = subprocess.run(
         ["aws", "sso", "login", "--profile", profile],
         check=False,
@@ -133,11 +114,8 @@ def login_profile(profile: str) -> None:
 
 
 def has_static_keys(profile: str) -> bool:
-    """
-    Whether the profile declares a static key pair envo reads
-    directly from the aws config.
-
-    """
+    # whether the profile declares a static key pair envo reads
+    # directly from the aws config
     section = _parsed_profile(profile)
     access_key = section.get("aws_access_key_id", fallback=None)
     secret_key = section.get("aws_secret_access_key", fallback=None)
@@ -145,14 +123,10 @@ def has_static_keys(profile: str) -> bool:
 
 
 def profile_credentials(profile: str) -> dict[str, str]:
-    """
-    Read a profile's credentials: static keys from the aws config
-    directly, anything else through the aws cli's resolution.
-
-    An sso profile whose token expired gets the cli's device-code
-    login first, then the export retries.
-
-    """
+    # read a profile's credentials: static keys from the aws config
+    # directly, anything else through the cli's resolution. an sso
+    # profile whose token expired gets the device-code login first,
+    # then the export retries
     section = _parsed_profile(profile)
 
     access_key = section.get("aws_access_key_id", fallback=None)
@@ -174,15 +148,9 @@ def profile_credentials(profile: str) -> dict[str, str]:
 
 
 def repo_variables(environment: str) -> dict[str, str]:
-    """
-    Collect the env vars the nearest repo declares, each naming the
-    ssm parameter that holds its value.
-
-    [tool.envo.vars] applies to every environment - most parameters
-    live at the same path everywhere - and an environment's own
-    [tool.envo.environments.<env>.vars] entry overrides or extends it.
-
-    """
+    # collect the env vars the nearest repo declares, each naming the
+    # ssm parameter holding its value; [tool.envo.vars] applies to
+    # every environment and an environment's own vars entry overrides
     directory = Path.cwd().resolve()
     while True:
         pyproject = directory / "pyproject.toml"

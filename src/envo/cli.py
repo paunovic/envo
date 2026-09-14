@@ -22,11 +22,8 @@ def materialize(
     credentials: dict[str, str],
     variables: dict[str, str],
 ) -> dict[str, str]:
-    """
-    Resolve each declared var's ssm parameter under the environment's
-    own credentials.
-
-    """
+    # resolve each declared var's ssm parameter under the
+    # environment's own credentials
     values: dict[str, str] = {}
     for variable, parameter in sorted(variables.items()):
         result = subprocess.run(
@@ -58,10 +55,7 @@ def materialize(
 
 
 def environment_for(environment: str) -> dict[str, str]:
-    """
-    Build the env vars a run under environment injects.
-
-    """
+    # build the env vars a run under environment injects
     if environment == "localhost":
         return {"ENVO_ENVIRONMENT": "localhost"}
 
@@ -86,10 +80,7 @@ def run_argv(argv: list[str], injected: dict[str, str] | None = None) -> int:
 
 
 def print_eval(environment: str) -> int:
-    """
-    Emit the environment as shell exports, for prompts.
-
-    """
+    # emit the environment as shell exports, for prompts
     if environment == "localhost":
         print(f"export ENVO_ENVIRONMENT={environment}")
         return 0
@@ -101,12 +92,9 @@ def print_eval(environment: str) -> int:
 
 
 def refresh(environment: str) -> int:
-    """
-    Pre-warm and verify an environment's credentials outside a
-    command run: an sso profile logs in first so an expired token
-    never trips a real command.
-
-    """
+    # pre-warm and verify an environment's credentials outside a
+    # command run; an sso profile logs in first so an expired token
+    # never trips a real command
     profile = config.configured_profiles().get(environment, environment)
 
     if config.is_sso_profile(profile):
