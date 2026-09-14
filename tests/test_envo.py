@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 import pytest
-import envo
+from envo import cli, config
 
 
 @pytest.fixture
@@ -20,7 +20,7 @@ def executed(monkeypatch: pytest.MonkeyPatch) -> list:
 
 @pytest.fixture
 def no_user_config(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
-    monkeypatch.setattr("envo.CONFIG_PATH", tmp_path / "config.toml")
+    monkeypatch.setattr("envo.config.CONFIG_PATH", tmp_path / "config.toml")
 
 
 @pytest.fixture
@@ -43,12 +43,12 @@ def aws_config(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Path:
 def write_user_config(monkeypatch: pytest.MonkeyPatch, tmp_path, table: str) -> None:
     config = tmp_path / "config.toml"
     config.write_text(table)
-    monkeypatch.setattr("envo.CONFIG_PATH", config)
+    monkeypatch.setattr("envo.config.CONFIG_PATH", config)
 
 
 def run_argv(monkeypatch: pytest.MonkeyPatch, *arguments: str) -> int:
     monkeypatch.setattr(sys, "argv", ["envo", *arguments])
-    return envo.main()
+    return cli.main()
 
 
 def test_a_remote_run_injects_credentials_through_the_environment(
@@ -136,7 +136,7 @@ def test_repo_declared_vars_materialize_under_the_credentials(
             stderr="",
         )
 
-    monkeypatch.setattr(envo.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
 
     exit_code = run_argv(monkeypatch, "qa", "seed", "app")
 
@@ -159,7 +159,7 @@ def test_a_failed_materialization_names_the_variable_and_parameter(
     monkeypatch.chdir(repo)
 
     monkeypatch.setattr(
-        envo.subprocess,
+        cli.subprocess,
         "run",
         lambda argv, **kwargs: subprocess.CompletedProcess(
             argv,
@@ -212,7 +212,7 @@ def test_config_execs_the_editor_on_the_config_file(
 ):
     monkeypatch.setenv("EDITOR", "an-editor")
     config = tmp_path / "config.toml"
-    monkeypatch.setattr("envo.CONFIG_PATH", config)
+    monkeypatch.setattr("envo.config.CONFIG_PATH", config)
 
     exit_code = run_argv(monkeypatch, "config")
 
@@ -234,7 +234,7 @@ def test_shared_vars_apply_to_every_environment(
     )
     monkeypatch.chdir(repo)
     monkeypatch.setattr(
-        envo.subprocess,
+        cli.subprocess,
         "run",
         lambda argv, **kwargs: subprocess.CompletedProcess(
             argv,
@@ -265,7 +265,7 @@ def test_an_environment_overrides_a_shared_var(
     )
     monkeypatch.chdir(repo)
     monkeypatch.setattr(
-        envo.subprocess,
+        cli.subprocess,
         "run",
         lambda argv, **kwargs: subprocess.CompletedProcess(
             argv,
@@ -329,7 +329,7 @@ def fake_cli(
         assert fragment in argv, f"unexpected call: {argv}"
         return outcome
 
-    monkeypatch.setattr(envo.subprocess, "run", fake_run)
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
     return log
 
 
