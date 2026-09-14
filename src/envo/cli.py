@@ -4,6 +4,7 @@ exec it with everything injected through the environment.
 
 """
 
+import json
 import os
 import shlex
 import subprocess
@@ -13,6 +14,7 @@ from envo import config
 
 USAGE = """usage: envo <environment> <command> [args...]
        envo eval <environment>
+       envo refresh <environment>
        envo config"""
 
 
@@ -98,6 +100,52 @@ def print_eval(environment: str) -> int:
     return 0
 
 
+def refresh(environment: str) -> int:
+    """
+    Pre-warm and verify an environment's credentials outside a
+    command run: an sso profile logs in first so an expired token
+    never trips a real command.
+
+    """
+    profile = config.configured_profiles().get(environment, environment)
+
+    if config.is_sso_profile(profile):
+        config.login_profile(profile)
+
+    credentials = config.profile_credentials(profile)
+    result = subprocess.run(
+        [
+            "aws",
+            "sts",
+            "get-caller-identity",
+            "--output",
+            "json",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, **credentials},
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"verifying credentials for profile {profile!r} failed:"
+            f" {result.stderr.strip()}",
+        )
+
+    identity = json.loads(result.stdout)
+    print(
+        f"envo: {environment} verified:"
+        f" account {identity['Account']}, user id {identity['UserId']}",
+    )
+    if config.has_static_keys(profile):
+        print(
+            "envo: nothing else to refresh - static keys"
+            " rotate by editing the aws config",
+        )
+
+    return 0
+
+
 def main() -> int:
     argv = sys.argv[1:]
 
@@ -122,6 +170,16 @@ def main() -> int:
             return 2
         try:
             return print_eval(command[0])
+        except RuntimeError as error:
+            print(f"envo: {error}", file=sys.stderr)
+            return 1
+
+    if environment == "refresh":
+        if not command:
+            print("envo: refresh needs an environment", file=sys.stderr)
+            return 2
+        try:
+            return refresh(command[0])
         except RuntimeError as error:
             print(f"envo: {error}", file=sys.stderr)
             return 1

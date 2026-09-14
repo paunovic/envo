@@ -423,3 +423,101 @@ def test_malformed_cli_output_names_the_profile(
 
     assert exit_code == 1
     assert "no credentials for profile 'chained'" in capsys.readouterr().err
+
+
+def test_refresh_forces_sso_login_then_verifies(
+    monkeypatch, tmp_path, capsys, no_user_config, sso_config
+):
+    argvs: list[list[str]] = []
+    envs: list[dict | None] = []
+    responses = [
+        ("sso", ok_export("")),
+        (
+            "export-credentials",
+            ok_export(
+                "AWS_ACCESS_KEY_ID=ASIA-fresh\n"
+                "AWS_SECRET_ACCESS_KEY=fresh-secret\n"
+                "AWS_SESSION_TOKEN=fresh-token\n",
+            ),
+        ),
+        (
+            "get-caller-identity",
+            ok_export(
+                '{"UserId": "AROA123456789012:marko",'
+                ' "Account": "123456789012",'
+                ' "Arn": "arn:aws:sts::123456789012:assumed-role/Admin/marko"}',
+            ),
+        ),
+    ]
+
+    def fake_run(argv: list[str], **kwargs) -> subprocess.CompletedProcess:
+        argvs.append(argv)
+        envs.append(kwargs.get("env"))
+        fragment, outcome = responses.pop(0)
+        assert fragment in argv, f"unexpected call: {argv}"
+        return outcome
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    exit_code = run_argv(monkeypatch, "refresh", "ssoqa")
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    login = ["aws", "sso", "login", "--profile", "ssoqa"]
+    verify = ["aws", "sts", "get-caller-identity", "--output", "json"]
+    assert login in argvs
+    assert verify in argvs
+    assert argvs.index(login) < argvs.index(verify)
+
+    sts_env = envs[argvs.index(verify)]
+    assert sts_env is not None
+    assert sts_env["AWS_ACCESS_KEY_ID"] == "ASIA-fresh"
+    assert sts_env["AWS_SESSION_TOKEN"] == "fresh-token"
+    assert "account 123456789012" in out
+    assert "AROA123456789012:marko" in out
+
+
+def test_refresh_verifies_a_static_profile_without_login(
+    monkeypatch, tmp_path, capsys, no_user_config, aws_config
+):
+    log = fake_cli(
+        monkeypatch,
+        [
+            (
+                "get-caller-identity",
+                ok_export(
+                    '{"UserId": "AKIA-qa-key",'
+                    ' "Account": "123456789012",'
+                    ' "Arn": "arn:aws:iam::123456789012:user/marko"}',
+                ),
+            ),
+        ],
+    )
+
+    exit_code = run_argv(monkeypatch, "refresh", "qa")
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert ["aws", "sts", "get-caller-identity", "--output", "json"] in log
+    assert not any("login" in argv for argv in log)
+    assert "account 123456789012" in out
+    assert "nothing else to refresh" in out
+
+
+def test_a_failed_verification_names_the_profile(
+    monkeypatch, tmp_path, capsys, no_user_config, aws_config
+):
+    fake_cli(
+        monkeypatch,
+        [
+            (
+                "get-caller-identity",
+                failed_export("the security token included in the request is invalid"),
+            ),
+        ],
+    )
+
+    exit_code = run_argv(monkeypatch, "refresh", "qa")
+
+    assert exit_code == 1
+    assert "verifying credentials for profile 'qa' failed" in capsys.readouterr().err

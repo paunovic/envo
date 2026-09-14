@@ -108,14 +108,49 @@ def exported_credentials(profile: str) -> dict[str, str]:
     return credentials
 
 
+def is_sso_profile(profile: str) -> bool:
+    """
+    Whether the profile section carries sso keys, so a device-code
+    login can refresh its token.
+
+    """
+    section = _parsed_profile(profile)
+    return any(key.startswith("sso_") for key in section.keys())
+
+
+def login_profile(profile: str) -> None:
+    """
+    Run the cli's device-code login for an sso profile - it prints
+    the authorization url to this console and waits for the browser.
+
+    """
+    login = subprocess.run(
+        ["aws", "sso", "login", "--profile", profile],
+        check=False,
+    )
+    if login.returncode != 0:
+        raise RuntimeError(f"aws sso login for profile {profile!r} failed")
+
+
+def has_static_keys(profile: str) -> bool:
+    """
+    Whether the profile declares a static key pair envo reads
+    directly from the aws config.
+
+    """
+    section = _parsed_profile(profile)
+    access_key = section.get("aws_access_key_id", fallback=None)
+    secret_key = section.get("aws_secret_access_key", fallback=None)
+    return access_key is not None and secret_key is not None
+
+
 def profile_credentials(profile: str) -> dict[str, str]:
     """
     Read a profile's credentials: static keys from the aws config
     directly, anything else through the aws cli's resolution.
 
     An sso profile whose token expired gets the cli's device-code
-    login first - it prints the authorization url to this console
-    and waits for the browser.
+    login first, then the export retries.
 
     """
     section = _parsed_profile(profile)
@@ -131,16 +166,10 @@ def profile_credentials(profile: str) -> dict[str, str]:
     try:
         return exported_credentials(profile)
     except RuntimeError:
-        if not any(key.startswith("sso_") for key in section.keys()):
+        if not is_sso_profile(profile):
             raise
 
-    login = subprocess.run(
-        ["aws", "sso", "login", "--profile", profile],
-        check=False,
-    )
-    if login.returncode != 0:
-        raise RuntimeError(f"aws sso login for profile {profile!r} failed")
-
+    login_profile(profile)
     return exported_credentials(profile)
 
 
