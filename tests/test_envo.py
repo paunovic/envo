@@ -5,7 +5,8 @@ import sys
 from pathlib import Path
 
 import pytest
-from envo import cli, config
+
+from envo import cli
 
 
 @pytest.fixture
