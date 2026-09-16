@@ -1,6 +1,6 @@
 # envo
 
-envo runs a command under another environment's identity: aws
+Envo runs a command under another environment's identity: aws
 credentials resolved per profile and the repo's declared ssm
 parameters materialized into the child's environment.
 The first argument names the environment, everything after it
@@ -10,15 +10,15 @@ is the command.
 $ envo qa aws s3 ls
 ```
 
-## install
+## Install
 
 ```
 uv tool install git+https://github.com/paunovic/envo
 ```
 
-## profiles
+## Profiles
 
-the profile name defaults to the environment's name, so matching
+The profile name defaults to the environment's name, so matching
 names stay zero-config; a mapping in `~/.config/envo/config.toml`
 renames it:
 
@@ -33,9 +33,9 @@ sso sessions, role chains and credential processes resolve through
 the aws cli - an expired sso token gets the browser login
 automatically.
 
-## declared vars
+## Declared vars
 
-a repo declares the env vars envo materializes, each naming the
+A repo declares the env vars envo materializes, each naming the
 ssm parameter that holds its value:
 
 ```toml
@@ -43,18 +43,18 @@ ssm parameter that holds its value:
 APP_DATABASE_URL = "/database/app/url/master"
 ```
 
-an environment overrides with its own
+An environment overrides with its own
 `[tool.envo.environments.<env>.vars]` table. `envo localhost` runs
 with only `ENVO_ENVIRONMENT` set - direnv owns local.
 
-## refresh and eval
+## Refresh and eval
 
 `envo refresh qa` logs an sso profile in first and verifies the
 result, printing the account and user id.
 `envo eval qa` prints the same set a run would inject, as shell
 exports for prompt integration.
 
-## development
+## Development
 
 ```
 uv sync
