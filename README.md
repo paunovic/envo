@@ -2,13 +2,12 @@
 
 envo runs a command under another environment's identity: aws
 credentials resolved per profile and the repo's declared ssm
-parameters materialized into the child's environment - never its
-argv, so `ps` never sees a key. The first argument names the
-environment, everything after it is the command, verbatim - the
-`env`/`timeout` convention:
+parameters materialized into the child's environment.
+The first argument names the environment, everything after it
+is the command.
 
 ```
-$ envo qa seed app --yes
+$ envo qa aws s3 ls
 ```
 
 ## Install
@@ -28,7 +27,7 @@ renames it:
 profile = "acme-qa"
 ```
 
-`envo config` opens that file in the editor, creating it first
+`envo config` opens config file in the editor, creating it first
 on a fresh machine. Static keys are read from `~/.aws/config`;
 sso sessions, role chains and credential processes resolve through
 the aws cli - an expired sso token gets the browser login
@@ -51,10 +50,9 @@ with only `ENVO_ENVIRONMENT` set - direnv owns local.
 ## Refresh and eval
 
 `envo refresh qa` logs an sso profile in first and verifies the
-result, printing the account and user id - proactive, so an
-expired token never trips a real command. `envo eval qa` prints
-the same set a run would inject, as shell exports for prompt
-integration.
+result, printing the account and user id.
+`envo eval qa` prints the same set a run would inject, as shell
+exports for prompt integration.
 
 ## Development
 
