@@ -10,15 +10,15 @@ is the command.
 $ envo qa aws s3 ls
 ```
 
-## Install
+## install
 
 ```
 uv tool install git+https://github.com/paunovic/envo
 ```
 
-## Profiles
+## profiles
 
-The profile name defaults to the environment's name, so matching
+the profile name defaults to the environment's name, so matching
 names stay zero-config; a mapping in `~/.config/envo/config.toml`
 renames it:
 
@@ -28,14 +28,14 @@ profile = "acme-qa"
 ```
 
 `envo config` opens config file in the editor, creating it first
-on a fresh machine. Static keys are read from `~/.aws/config`;
+on a fresh machine. static keys are read from `~/.aws/config`;
 sso sessions, role chains and credential processes resolve through
 the aws cli - an expired sso token gets the browser login
 automatically.
 
-## Declared vars
+## declared vars
 
-A repo declares the env vars envo materializes, each naming the
+a repo declares the env vars envo materializes, each naming the
 ssm parameter that holds its value:
 
 ```toml
@@ -43,18 +43,18 @@ ssm parameter that holds its value:
 APP_DATABASE_URL = "/database/app/url/master"
 ```
 
-An environment overrides with its own
+an environment overrides with its own
 `[tool.envo.environments.<env>.vars]` table. `envo localhost` runs
 with only `ENVO_ENVIRONMENT` set - direnv owns local.
 
-## Refresh and eval
+## refresh and eval
 
 `envo refresh qa` logs an sso profile in first and verifies the
 result, printing the account and user id.
 `envo eval qa` prints the same set a run would inject, as shell
 exports for prompt integration.
 
-## Development
+## development
 
 ```
 uv sync
