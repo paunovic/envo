@@ -47,11 +47,9 @@ An environment overrides with its own
 `[tool.envo.environments.<env>.vars]` table. `envo localhost` runs
 with only `ENVO_ENVIRONMENT` set - direnv owns local.
 
-`envo --no-vars <environment> <command...>` skips materialization
-entirely: `ENVO_ENVIRONMENT` is still set and the profile's
-credentials are configured, but the declared vars never reach ssm -
-envo prints one notice to stderr so the leaner environment is
-never silent.
+`envo --no-vars <environment> <command...>` skips variable materialization
+entirely: `ENVO_ENVIRONMENT` is still set and the profile's credentials
+are configured, but the declared variables aren't resolved from the SSM.
 
 ## Refresh and eval
 
