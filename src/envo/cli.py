@@ -12,7 +12,7 @@ import sys
 
 from envo import config
 
-USAGE = """usage: envo <environment> <command> [args...]
+USAGE = """usage: envo [--no-vars] <environment> <command> [args...]
        envo eval <environment>
        envo refresh <environment>
        envo config"""
@@ -67,13 +67,20 @@ def materialize(
     return values
 
 
-def environment_for(environment: str) -> dict[str, str]:
+def environment_for(environment: str, no_vars: bool = False) -> dict[str, str]:
     # build the env vars a run under environment injects
     if environment == "localhost":
         return {"ENVO_ENVIRONMENT": "localhost"}
 
     profile = config.configured_profiles().get(environment, environment)
     credentials = config.profile_credentials(profile)
+    if no_vars:
+        print(
+            "envo: skipping variable materialization (--no-vars)",
+            file=sys.stderr,
+        )
+        return {**credentials, "ENVO_ENVIRONMENT": environment}
+
     resolved = materialize(credentials, config.repo_variables(environment))
     return {
         **credentials,
@@ -90,13 +97,13 @@ def run_argv(argv: list[str], injected: dict[str, str] | None = None) -> int:
         return 127
 
 
-def print_eval(environment: str) -> int:
+def print_eval(environment: str, no_vars: bool = False) -> int:
     # emit the environment as shell exports, for prompts
     if environment == "localhost":
         print(f"export ENVO_ENVIRONMENT={environment}")
         return 0
 
-    for key, value in environment_for(environment).items():
+    for key, value in environment_for(environment, no_vars).items():
         print(f"export {key}={shlex.quote(value)}")
 
     return 0
@@ -148,6 +155,12 @@ def refresh(environment: str) -> int:
 def main() -> int:
     argv = sys.argv[1:]
 
+    # the flag must precede the environment: past it, every argument
+    # belongs to the child command verbatim
+    no_vars = argv[:1] == ["--no-vars"]
+    if no_vars:
+        argv = argv[1:]
+
     if not argv or argv[0] in ("-h", "--help"):
         print(USAGE)
         return 0
@@ -168,7 +181,7 @@ def main() -> int:
             print("envo: eval needs an environment", file=sys.stderr)
             return 2
         try:
-            return print_eval(command[0])
+            return print_eval(command[0], no_vars)
         except RuntimeError as error:
             print(f"envo: {error}", file=sys.stderr)
             return 1
@@ -195,7 +208,7 @@ def main() -> int:
         return 2
 
     try:
-        injected = environment_for(environment)
+        injected = environment_for(environment, no_vars)
     except RuntimeError as error:
         print(f"envo: {error}", file=sys.stderr)
         return 1

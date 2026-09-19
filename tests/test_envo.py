@@ -164,6 +164,63 @@ def test_repo_declared_vars_materialize_under_the_credentials(
     assert env["APP_DATABASE_URL"] == "postgresql+psycopg://app:secret@qa-db/app"
 
 
+def test_no_vars_skips_materialization_but_keeps_credentials(
+    monkeypatch, tmp_path, capsys, executed, no_user_config, aws_config
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text(
+        "[tool.envo.vars]\n"
+        'APP_DATABASE_URL = "/database/app/url/master"\n',
+    )
+    monkeypatch.chdir(repo)
+
+    def unexpected(credentials, variables):
+        raise AssertionError("materialization must not run under --no-vars")
+
+    monkeypatch.setattr(cli, "materialize", unexpected)
+
+    exit_code = run_argv(monkeypatch, "--no-vars", "qa", "seed", "app")
+
+    stderr = capsys.readouterr().err
+    assert exit_code == 0
+    notice = "envo: skipping variable materialization (--no-vars)"
+    assert stderr.count(notice) == 1
+    _, argv, env = executed[0]
+    assert argv == ["seed", "app"]
+    assert env["AWS_ACCESS_KEY_ID"] == "AKIA-qa-key"
+    assert env["AWS_SECRET_ACCESS_KEY"] == "qa-secret"
+    assert env["ENVO_ENVIRONMENT"] == "qa"
+    assert "APP_DATABASE_URL" not in env
+
+
+def test_without_the_flag_vars_still_materialize(
+    monkeypatch, tmp_path, executed, no_user_config, aws_config
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text(
+        "[tool.envo.vars]\n"
+        'APP_DATABASE_URL = "/database/app/url/master"\n',
+    )
+    monkeypatch.chdir(repo)
+
+    calls: list[dict] = []
+
+    def fake_materialize(credentials, variables):
+        calls.append(variables)
+        return {"APP_DATABASE_URL": "postgresql://app@qa-db/app"}
+
+    monkeypatch.setattr(cli, "materialize", fake_materialize)
+
+    exit_code = run_argv(monkeypatch, "qa", "seed", "app")
+
+    assert exit_code == 0
+    assert len(calls) == 1
+    _, _, env = executed[0]
+    assert env["APP_DATABASE_URL"] == "postgresql://app@qa-db/app"
+
+
 def test_a_failed_materialization_names_the_variable_and_parameter(
     monkeypatch, tmp_path, capsys, no_user_config, aws_config
 ):

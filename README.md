@@ -47,6 +47,14 @@ An environment overrides with its own
 `[tool.envo.environments.<env>.vars]` table. `envo localhost` runs
 with only `ENVO_ENVIRONMENT` set - direnv owns local.
 
+`envo --no-vars <environment> <command...>` skips materialization
+entirely: the profile's credentials still resolve and
+`ENVO_ENVIRONMENT` is still set, but the declared vars never reach
+ssm - envo prints one notice to stderr so the leaner environment is
+never silent. This is the bootstrap escape hatch: a script like
+`setup_aws_environment.py` needs only credentials, while the repo's
+declared database url points at a stack that does not exist yet.
+
 ## Refresh and eval
 
 `envo refresh qa` logs an sso profile in first and verifies the
