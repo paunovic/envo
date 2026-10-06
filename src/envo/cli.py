@@ -1,9 +1,3 @@
-"""
-The envo command line: build the environment a command runs in and
-exec it with everything injected through the environment.
-
-"""
-
 import json
 import os
 import shlex
@@ -107,7 +101,7 @@ def print_eval(environment: str, no_vars: bool = False) -> int:
 
 
 def refresh(environment: str) -> int:
-    # verify credentials before a real command needs them
+    # verify credentials
     profile = config.configured_profiles().get(environment, environment)
 
     if config.is_sso_profile(profile):

@@ -1,9 +1,3 @@
-"""
-Configuration reading for envo: the envo config, aws profile
-credentials, and repo-declared materialization variables.
-
-"""
-
 import configparser
 import os
 import subprocess
@@ -36,7 +30,6 @@ def configured_profiles() -> dict[str, str]:
 
 
 def aws_config_path() -> Path:
-    # $AWS_CONFIG_FILE wins when set
     override = os.environ.get("AWS_CONFIG_FILE")
     if override:
         return Path(override)
@@ -56,8 +49,6 @@ def _parsed_profile(profile: str) -> configparser.SectionProxy:
 
 
 def exported_credentials(profile: str) -> dict[str, str]:
-    # let the cli handle what envo can't parse
-    # (sso, role chains, credential processes)
     result = subprocess.run(
         [
             "aws",
@@ -94,7 +85,6 @@ def exported_credentials(profile: str) -> dict[str, str]:
 
 
 def is_sso_profile(profile: str) -> bool:
-    # sso keys mean device-code login is possible
     section = _parsed_profile(profile)
     return any(key.startswith("sso_") for key in section)
 
@@ -118,7 +108,6 @@ def has_static_keys(profile: str) -> bool:
 
 
 def profile_credentials(profile: str) -> dict[str, str]:
-    # static keys first, else the cli. expired sso token: login, retry
     section = _parsed_profile(profile)
 
     access_key = section.get("aws_access_key_id", fallback=None)
